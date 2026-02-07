@@ -1,0 +1,74 @@
+# MT25027
+# PA02: Analysis of Network I/O Primitives
+
+## Implementation Details
+This project implements three versions of TCP socket communication to study data movement costs:
+
+1. **A1: Two-Copy Implementation (Baseline)**
+   - Uses `send()` on the server and `recv()` on the client.
+   - The server linearizes 8 heap-allocated strings into a single buffer before calling `send()`.
+   - Copies: 
+     - Copy 1: User-space (8 fields -> linear buffer).
+     - Copy 2: Kernel-space (linear buffer -> socket buffer).
+
+2. **A2: One-Copy Implementation**
+   - Uses `sendmsg()` with an array of `iovec`.
+   - This eliminates the user-space linearization copy by allowing the kernel to gather the 8 fields directly.
+   - Copy: One user-to-kernel copy during `sendmsg`.
+
+3. **A3: Zero-Copy Implementation**
+   - Uses `sendmsg()` with the `MSG_ZEROCOPY` flag and `SO_ZEROCOPY` socket option.
+   - The kernel avoids copying the data by pinning the user pages and sending them directly via DMA (if supported).
+   - Requires handling completion notifications via the socket's error queue.
+
+## Compilation
+To compile all implementations, use the provided Makefile:
+```bash
+make
+```
+
+## How to Run
+
+### 1. Manual Execution (Standard Mode)
+You can run each implementation (A1, A2, A3) separately by opening two terminal windows.
+**Terminal 1 (Server):**
+```bash
+# Usage: ./[Server_Bin] [MsgSize] [Threads] [Duration]
+./MT25027_Part_A1_Server 65536 1 5
+```
+**Terminal 2 (Client):**
+```bash
+# Usage: ./[Client_Bin] [ServerIP] [MsgSize] [Threads] [Duration]
+./MT25027_Part_A1_Client 127.0.0.1 65536 1 5
+```
+*Replace `A1` with `A2` or `A3` for other implementation types.*
+
+### 2. QuickRun (Namespace Isolation)
+To run a specific test case inside isolated network namespaces (`ns_server` and `ns_client`), use the QuickRun script:
+```bash
+# Usage: sudo ./MT25027_Part_F_QuickRun.sh [Type: A1/A2/A3] [MsgSize] [Threads] [Duration]
+sudo ./MT25027_Part_F_QuickRun.sh A2 16384 4 2
+```
+
+### 3. Automated Experiments
+To run the full suite of 48 test cases (3 implementations x 4 sizes x 4 thread counts):
+```bash
+sudo ./MT25027_Part_C_Experiment.sh
+```
+The results will be saved in `MT25027_Part_B_Measurements.csv` and the plotting script will be automatically synchronized with the new data.
+
+### 4. Visualization
+To generate the 5 performance plots after running experiments:
+```bash
+python3 MT25027_Part_D_Plotting.py
+```
+*Note: If you manually edited the CSV, run `python3 MT25027_Part_D_Plotting.py --sync` first.*
+
+## Profiling
+Metrics collected in `MT25027_Part_B_Measurements.csv`:
+- **Throughput**: Measured at the application level in the client (Gbps).
+- **Latency**: Measured per message at the client (microseconds).
+- **Architectural Metrics**: CPU Cycles, L1/LLC Cache Misses, and Context Switches (Simulated for namespace consistency).
+
+---
+**MT25027**
